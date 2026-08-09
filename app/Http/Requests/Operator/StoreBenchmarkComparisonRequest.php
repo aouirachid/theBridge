@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Operator;
 
+use App\Support\Validation\PublicDisplayText;
 use Carbon\CarbonImmutable;
+use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -25,11 +27,15 @@ class StoreBenchmarkComparisonRequest extends FormRequest
         $observedAt = $this->input('observed_at');
 
         if ($observedAt !== null) {
-            $this->merge([
-                'observed_at' => CarbonImmutable::parse((string) $observedAt, 'Africa/Casablanca')
-                    ->utc()
-                    ->format('Y-m-d H:i:s'),
-            ]);
+            try {
+                $this->merge([
+                    'observed_at' => CarbonImmutable::parse((string) $observedAt, 'Africa/Casablanca')
+                        ->utc()
+                        ->format('Y-m-d H:i:s'),
+                ]);
+            } catch (InvalidFormatException) {
+                $this->merge(['observed_at' => (string) $observedAt]);
+            }
         }
     }
 
@@ -44,9 +50,9 @@ class StoreBenchmarkComparisonRequest extends FormRequest
 
         return [
             'benchmark_price_per_kg' => ['required', 'string', $money, 'not_in:0,0.0,0.00'],
-            'market_name' => ['required', 'string', 'max:160'],
+            'market_name' => ['required', 'string', 'max:160', new PublicDisplayText],
             'source_type' => ['required', Rule::in(['url', 'document', 'field_observation'])],
-            'source_reference' => ['required', 'string', 'max:500'],
+            'source_reference' => ['required', 'string', 'max:500', new PublicDisplayText],
             'observed_at' => ['required', 'date', 'before_or_equal:now'],
             'is_demo' => ['required', 'boolean'],
         ];

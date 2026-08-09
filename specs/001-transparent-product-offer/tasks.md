@@ -298,3 +298,19 @@ and a fresh attributed benchmark.
 
 Do not mark a task complete while its relevant test is failing, its command was skipped,
 or its output differs from the documented contract.
+
+---
+
+## Phase 7: Convergence
+
+**Purpose**: Close specific security, validation, and acceptance-evidence gaps found by
+comparing the implemented feature with the specification and constitution.
+
+- [ ] T082 [US1] (partial: SR-002, SR-003, SC-004) Add failing Pest cases for email, phone, exact-address-style text, and credential-bearing URLs in every public text input, then add one reusable public-display safety validator under `app/Support/Validation/` and apply it in `app/Http/Requests/Operator/StoreProductOfferRequest.php`, `app/Http/Requests/Operator/StoreBenchmarkComparisonRequest.php`, and `app/Actions/ProductOffers/RecordBenchmarkComparisonAction.php`; return field errors and never log rejected values
+- [ ] T083 [US1] (partial: SR-002 malformed-input edge case) Add HTTP tests proving invalid `availability_starts_at`, `availability_ends_at`, and `observed_at` strings return field-specific validation errors without a 500 response, then make datetime normalization exception-safe in `app/Http/Requests/Operator/StoreProductOfferRequest.php` and `app/Http/Requests/Operator/StoreBenchmarkComparisonRequest.php`
+- [ ] T084 [US1] (partial: SR-002 unexpected-input edge case) Add HTTP tests proving an unknown `standard_costs` key and non-empty bodies sent to publish, benchmark-publish, replacement, or withdrawal routes are rejected without changing data, then enforce exact allowed keys in `app/Http/Requests/Operator/StoreProductOfferRequest.php` and reject body fields in the four no-input Form Requests
+- [ ] T085 [US2] (missing proof: SC-001, SC-006) Time one complete operator create-review-publish run and conduct the specified moderated check with five first-time visitors; report the elapsed time and how many visitors identify all six required facts within 60 seconds, and leave the feature incomplete if the results miss either threshold
+
+**Convergence Checkpoint**: Publicly displayed text is guarded against the specified
+sensitive patterns, malformed or unexpected input fails through validation, and the two
+manual usability thresholds have recorded results.
