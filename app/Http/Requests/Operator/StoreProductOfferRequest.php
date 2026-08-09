@@ -36,6 +36,13 @@ class StoreProductOfferRequest extends FormRequest
                 "custom_costs.$index.name" => Str::of((string) ($custom['name'] ?? ''))->squish()->toString(),
             ]);
         }
+
+        foreach ($this->input('delivery_slots', []) as $index => $slot) {
+            $this->merge([
+                "delivery_slots.$index.starts_at" => $this->normalizeDateTime("delivery_slots.$index.starts_at"),
+                "delivery_slots.$index.ends_at" => $this->normalizeDateTime("delivery_slots.$index.ends_at"),
+            ]);
+        }
     }
 
     /**
@@ -79,12 +86,16 @@ class StoreProductOfferRequest extends FormRequest
             'custom_costs' => ['array', 'max:10'],
             'custom_costs.*.name' => ['required', 'string', 'max:120'],
             'custom_costs.*.amount_per_kg' => ['required', 'string', $money],
+            'delivery_slots' => ['required', 'array', 'min:1', 'max:14'],
+            'delivery_slots.*.starts_at' => ['required', 'date'],
+            'delivery_slots.*.ends_at' => ['required', 'date'],
         ];
     }
 
     /**
      * Reject custom cost names that collide with a standard category or each
-     * other after normalization.
+     * other after normalization, and delivery slots that duplicate each other,
+     * are inverted, or fall outside the offer availability window.
      */
     public function withValidator(Validator $validator): void
     {
@@ -109,6 +120,37 @@ class StoreProductOfferRequest extends FormRequest
                 }
 
                 $seen[] = $normalized;
+            }
+
+            $slots = $this->input('delivery_slots', []);
+            $windowStart = $this->input('availability_starts_at');
+            $windowEnd = $this->input('availability_ends_at');
+            $pairs = [];
+
+            foreach ($slots as $index => $slot) {
+                $startsAt = $slot['starts_at'] ?? null;
+                $endsAt = $slot['ends_at'] ?? null;
+
+                if ($startsAt === null || $endsAt === null) {
+                    continue;
+                }
+
+                $pair = $startsAt.'|'.$endsAt;
+
+                if (in_array($pair, $pairs, true)) {
+                    $validator->errors()->add("delivery_slots.$index.starts_at", 'Duplicate delivery slots are not allowed.');
+                }
+
+                $pairs[] = $pair;
+
+                if ($endsAt <= $startsAt) {
+                    $validator->errors()->add("delivery_slots.$index.ends_at", 'The slot must end after it starts.');
+                }
+
+                if ($windowStart !== null && $windowEnd !== null
+                    && ($startsAt < $windowStart || $endsAt > $windowEnd)) {
+                    $validator->errors()->add("delivery_slots.$index.starts_at", 'Delivery slots must fit inside the offer availability window.');
+                }
             }
         });
     }

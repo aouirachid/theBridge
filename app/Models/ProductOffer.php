@@ -140,6 +140,28 @@ class ProductOffer extends Model
             ->orderByDesc('id');
     }
 
+    /**
+     * The offer's bounded delivery slots in start order.
+     *
+     * @return HasMany<OfferDeliverySlot, $this>
+     */
+    public function deliverySlots(): HasMany
+    {
+        return $this->hasMany(OfferDeliverySlot::class)
+            ->orderBy('starts_at')
+            ->orderBy('id');
+    }
+
+    /**
+     * The confirmed orders captured against this offer.
+     *
+     * @return HasMany<Order, $this>
+     */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
     public function isDraft(): bool
     {
         return $this->published_at === null;

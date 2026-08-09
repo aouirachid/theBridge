@@ -25,6 +25,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $two_factor_confirmed_at
  * @property string|null $remember_token
  * @property bool $is_sourcing_operator
+ * @property bool $is_operations_operator
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -47,6 +48,7 @@ class User extends Authenticatable implements PasskeyUser
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'is_sourcing_operator' => 'boolean',
+            'is_operations_operator' => 'boolean',
         ];
     }
 }

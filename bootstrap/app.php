@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\Ordering\OrderConflictException;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
@@ -27,4 +28,17 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        $exceptions->renderable(function (OrderConflictException $exception, Request $request) {
+            if (! $request->expectsJson()) {
+                return null;
+            }
+
+            return response()->json([
+                'error' => [
+                    'code' => $exception->code,
+                    'message' => $exception->getMessage(),
+                ],
+            ], 409);
+        });
     })->create();

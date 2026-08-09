@@ -12,7 +12,7 @@ use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
 
-function publicOffer(array $offerOverrides = [], array $comparisonOverrides = []): ProductOffer
+function publicOffer(array $offerOverrides = [], array $comparisonOverrides = [], bool $withSlot = true): ProductOffer
 {
     $offer = ProductOffer::factory()
         ->published()
@@ -31,6 +31,13 @@ function publicOffer(array $offerOverrides = [], array $comparisonOverrides = []
         'saving_percentage_bps' => 3125,
         'published_at' => now()->subHour()->subMinute(),
     ], $comparisonOverrides));
+
+    if ($withSlot) {
+        $offer->deliverySlots()->create([
+            'starts_at' => now()->addDays(2)->startOfDay()->addHours(2),
+            'ends_at' => now()->addDays(2)->startOfDay()->addHours(4),
+        ]);
+    }
 
     return $offer;
 }
@@ -65,11 +72,84 @@ it('returns the allowlisted public shape with no private fields', function () {
 
     $data = app(ShowPublicProductOfferAction::class)->execute($offer->public_id);
 
-    expect(array_keys($data))->toBe(['offer', 'currentComparison', 'freshComparisonUnavailable', 'comparisonHistory']);
+    expect(array_keys($data))->toBe(['offer', 'currentComparison', 'freshComparisonUnavailable', 'comparisonHistory', 'order']);
     expect($data['freshComparisonUnavailable'])->toBeFalse();
     expect($data['comparisonHistory'])->toBe([]);
 
     assertNoPrivateKeys($data);
+});
+
+it('returns the bounded order props with only future delivery slots', function () {
+    $offer = publicOffer();
+    $offer->deliverySlots()->create([
+        'starts_at' => now()->addDays(3)->startOfDay()->addHours(2),
+        'ends_at' => now()->addDays(3)->startOfDay()->addHours(4),
+    ]);
+
+    $data = app(ShowPublicProductOfferAction::class)->execute($offer->public_id);
+
+    $order = $data['order'];
+
+    expect($order['canOrder'])->toBeTrue();
+    expect($order['deliveryZones'])->toBe([
+        ['code' => 'casablanca_centre', 'label' => 'Casablanca Centre'],
+        ['code' => 'casablanca_east', 'label' => 'Casablanca East'],
+        ['code' => 'casablanca_west', 'label' => 'Casablanca West'],
+    ]);
+    expect($order['deliverySlots'])->toHaveCount(2);
+    expect($order['deliverySlots'][0])->toHaveKeys(['publicId', 'startsAt', 'endsAt', 'serviceDate', 'label']);
+    expect($order['deliverySlots'][0]['publicId'])->toBe((string) $offer->deliverySlots()->oldest()->value('public_id'));
+    expect($order['submissionToken'])->toBeString();
+});
+
+it('excludes past delivery slots from the order props', function () {
+    $this->freezeTime();
+
+    $offer = publicOffer();
+    $offer->deliverySlots()->create([
+        'starts_at' => now()->subHour(),
+        'ends_at' => now()->addHour(),
+    ]);
+
+    $data = app(ShowPublicProductOfferAction::class)->execute($offer->public_id, now());
+
+    expect($data['order']['deliverySlots'])->toHaveCount(1);
+    expect($data['order']['deliverySlots'][0]['serviceDate'])->toBe(
+        now()->addDays(2)->setTimezone('Africa/Casablanca')->toDateString(),
+    );
+});
+
+it('marks canOrder false when no future delivery slot exists', function () {
+    $this->freezeTime();
+
+    $offer = publicOffer(withSlot: false);
+
+    $data = app(ShowPublicProductOfferAction::class)->execute($offer->public_id, now());
+
+    expect($data['order']['canOrder'])->toBeFalse();
+    expect($data['order']['deliverySlots'])->toBe([]);
+    expect($data['order']['submissionToken'])->toBeNull();
+});
+
+it('does not offer ordering for a superseded offer', function () {
+    $this->freezeTime();
+
+    $offer = publicOffer([
+        'published_at' => now()->subDays(20),
+        'superseded_at' => now()->subDays(5),
+    ], [
+        'observed_at' => now()->subDays(5)->subHour(),
+        'published_at' => now()->subDays(5)->subHour()->subMinute(),
+    ]);
+
+    $replacement = ProductOffer::factory()->published()->create();
+    $offer->forceFill(['replaces_product_offer_id' => null])->save();
+    $replacement->forceFill(['replaces_product_offer_id' => $offer->id])->save();
+
+    $data = app(ShowPublicProductOfferAction::class)->execute($offer->public_id, now());
+
+    expect($data['order']['canOrder'])->toBeFalse();
+    expect($data['order']['submissionToken'])->toBeNull();
 });
 
 it('returns the exact tomato values for the public breakdown', function () {

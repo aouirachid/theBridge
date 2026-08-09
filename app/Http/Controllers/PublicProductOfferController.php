@@ -20,6 +20,7 @@ class PublicProductOfferController extends Controller
             'currentComparison' => $data['currentComparison'],
             'freshComparisonUnavailable' => $data['freshComparisonUnavailable'],
             'comparisonHistory' => $data['comparisonHistory'],
+            'order' => $data['order'],
         ]);
     }
 }

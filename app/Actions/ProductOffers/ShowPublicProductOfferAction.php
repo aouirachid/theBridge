@@ -2,12 +2,15 @@
 
 namespace App\Actions\ProductOffers;
 
+use App\Enums\DeliveryZone;
 use App\Models\BenchmarkComparison;
 use App\Models\OfferCostComponent;
+use App\Models\OfferDeliverySlot;
 use App\Models\ProductOffer;
 use App\Support\Pricing\OfferPriceCalculator;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -44,6 +47,12 @@ final class ShowPublicProductOfferAction
      *     currentComparison: array<string, mixed>|null,
      *     freshComparisonUnavailable: bool,
      *     comparisonHistory: array<int, array<string, mixed>>,
+     *     order: array{
+     *         canOrder: bool,
+     *         deliveryZones: array<int, array{code: string, label: string}>,
+     *         deliverySlots: array<int, array{publicId: string, startsAt: string, endsAt: string, serviceDate: string, label: string}>,
+     *         submissionToken: string|null,
+     *     },
      * }
      */
     public function execute(string $publicId, ?CarbonInterface $now = null): array
@@ -70,6 +79,60 @@ final class ShowPublicProductOfferAction
             'currentComparison' => $currentComparison,
             'freshComparisonUnavailable' => $currentComparison === null,
             'comparisonHistory' => $history,
+            'order' => $this->order($offer, $now),
+        ];
+    }
+
+    /**
+     * The bounded order form props for the current public offer.
+     *
+     * @return array{
+     *     canOrder: bool,
+     *     deliveryZones: array<int, array{code: string, label: string}>,
+     *     deliverySlots: array<int, array{publicId: string, startsAt: string, endsAt: string, serviceDate: string, label: string}>,
+     *     submissionToken: string|null,
+     * }
+     */
+    private function order(ProductOffer $offer, CarbonInterface $now): array
+    {
+        $futureSlots = $offer->deliverySlots()
+            ->where('starts_at', '>', $now)
+            ->get()
+            ->map(fn (OfferDeliverySlot $slot): array => $this->deliverySlot($slot))
+            ->values()
+            ->all();
+
+        $canOrder = $offer->isPublished()
+            && ! $offer->isSuperseded()
+            && $futureSlots !== [];
+
+        return [
+            'canOrder' => $canOrder,
+            'deliveryZones' => array_map(fn (DeliveryZone $zone): array => [
+                'code' => $zone->value,
+                'label' => $zone->label(),
+            ], DeliveryZone::cases()),
+            'deliverySlots' => $futureSlots,
+            'submissionToken' => $canOrder ? Str::uuid()->toString() : null,
+        ];
+    }
+
+    /**
+     * @return array{publicId: string, startsAt: string, endsAt: string, serviceDate: string, label: string}
+     */
+    private function deliverySlot(OfferDeliverySlot $slot): array
+    {
+        $startsAt = $slot->starts_at;
+        $endsAt = $slot->ends_at;
+        $casablancaStart = $startsAt->copy()->setTimezone('Africa/Casablanca');
+        $casablancaEnd = $endsAt->copy()->setTimezone('Africa/Casablanca');
+
+        return [
+            'publicId' => (string) $slot->public_id,
+            'startsAt' => $startsAt->toIso8601String(),
+            'endsAt' => $endsAt->toIso8601String(),
+            'serviceDate' => $casablancaStart->toDateString(),
+            'label' => $casablancaStart->format('D j M H:i').' – '.$casablancaEnd->format('H:i'),
         ];
     }
 

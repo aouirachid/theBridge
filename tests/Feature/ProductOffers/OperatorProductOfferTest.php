@@ -18,6 +18,8 @@ beforeEach(function () {
 
 function validStorePayload(array $overrides = []): array
 {
+    $slotStartsAt = now()->addDays(2)->startOfDay()->addHours(2);
+
     return array_merge([
         'crop' => 'Tomatoes',
         'origin' => 'Souss-Massa',
@@ -33,6 +35,10 @@ function validStorePayload(array $overrides = []): array
             'delivery_allocation' => '0.90',
         ],
         'custom_costs' => [],
+        'delivery_slots' => [
+            ['starts_at' => $slotStartsAt->toDateTimeString(), 'ends_at' => $slotStartsAt->copy()->addHours(2)->toDateTimeString()],
+            ['starts_at' => $slotStartsAt->copy()->addDay()->toDateTimeString(), 'ends_at' => $slotStartsAt->copy()->addDay()->addHours(2)->toDateTimeString()],
+        ],
     ], $overrides);
 }
 
@@ -47,6 +53,10 @@ function draftWithStandardCosts(array $overrides = []): ProductOffer
         OfferCostComponent::factory()->standard('quality_control', 20)->make(),
         OfferCostComponent::factory()->standard('hub_handling_storage', 30)->make(),
         OfferCostComponent::factory()->standard('delivery_allocation', 90)->make(),
+    ]);
+    $offer->deliverySlots()->create([
+        'starts_at' => now()->addDays(2)->startOfDay()->addHours(2),
+        'ends_at' => now()->addDays(2)->startOfDay()->addHours(4),
     ]);
 
     return $offer;
@@ -96,6 +106,58 @@ it('stores a draft offer and recalculates the snapshot', function () {
     expect($offer->final_price_minor)->toBe(550);
     expect($offer->farmer_share_bps)->toBe(5091);
     expect($offer->status())->toBe('draft');
+});
+
+it('stores a draft with its delivery slots', function () {
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.store'), validStorePayload())
+        ->assertRedirectToRoute('operator.offers.edit', ProductOffer::query()->sole());
+
+    $slots = ProductOffer::query()->sole()->deliverySlots()->get();
+
+    expect($slots)->toHaveCount(2);
+    expect($slots->pluck('public_id'))->each->not->toBeNull();
+    expect($slots->first()->starts_at->isFuture())->toBeTrue();
+});
+
+it('rejects duplicate delivery slots in the payload', function () {
+    $startsAt = now()->addDays(2)->startOfDay()->addHours(2)->toDateTimeString();
+
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.store'), validStorePayload([
+            'delivery_slots' => [
+                ['starts_at' => $startsAt, 'ends_at' => now()->addDays(2)->startOfDay()->addHours(4)->toDateTimeString()],
+                ['starts_at' => $startsAt, 'ends_at' => now()->addDays(2)->startOfDay()->addHours(4)->toDateTimeString()],
+            ],
+        ]))
+        ->assertSessionHasErrors('delivery_slots.1.starts_at');
+
+    expect(ProductOffer::query()->count())->toBe(0);
+});
+
+it('rejects more than fourteen delivery slots in the payload', function () {
+    $slots = collect(range(1, 15))->map(fn (int $i) => [
+        'starts_at' => now()->addDays(2)->startOfDay()->addHours($i * 2)->toDateTimeString(),
+        'ends_at' => now()->addDays(2)->startOfDay()->addHours($i * 2 + 1)->toDateTimeString(),
+    ])->all();
+
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.store'), validStorePayload(['delivery_slots' => $slots]))
+        ->assertSessionHasErrors('delivery_slots');
+
+    expect(ProductOffer::query()->count())->toBe(0);
+});
+
+it('rejects a delivery slot outside the offer window', function () {
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.store'), validStorePayload([
+            'delivery_slots' => [
+                ['starts_at' => now()->addDays(9)->startOfDay()->toDateTimeString(), 'ends_at' => now()->addDays(9)->startOfDay()->addHours(2)->toDateTimeString()],
+            ],
+        ]))
+        ->assertSessionHasErrors('delivery_slots.0.starts_at');
+
+    expect(ProductOffer::query()->count())->toBe(0);
 });
 
 it('returns nested validation errors for missing standard costs', function () {
@@ -225,6 +287,32 @@ it('rejects publishing with a stale benchmark', function () {
     expect($offer->refresh()->published_at)->toBeNull();
 });
 
+it('rejects publishing a draft without a future delivery slot', function () {
+    $offer = ProductOffer::factory()->create([
+        'farmer_payment_minor' => 280,
+        'platform_margin_minor' => 100,
+    ]);
+    $offer->costs()->saveMany([
+        OfferCostComponent::factory()->standard('collection', 30)->make(),
+        OfferCostComponent::factory()->standard('quality_control', 20)->make(),
+        OfferCostComponent::factory()->standard('hub_handling_storage', 30)->make(),
+        OfferCostComponent::factory()->standard('delivery_allocation', 90)->make(),
+    ]);
+    $benchmark = BenchmarkComparison::factory()->create([
+        'product_offer_id' => $offer->id,
+        'benchmark_price_minor' => 800,
+        'observed_at' => now()->subHour(),
+    ]);
+
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.publications.store', $offer), [
+            'benchmark_comparison_id' => $benchmark->id,
+        ])
+        ->assertSessionHasErrors('benchmark_comparison_id');
+
+    expect($offer->refresh()->published_at)->toBeNull();
+});
+
 it('withdraws a published offer as an operator with a redirect and toast', function () {
     $offer = ProductOffer::factory()->published()->create();
 
@@ -308,6 +396,11 @@ function publishedSourceOffer(array $offerOverrides = []): ProductOffer
         'saving_minor' => 250,
         'saving_percentage_bps' => 3125,
         'published_at' => now()->subHour()->subMinute(),
+    ]);
+
+    $offer->deliverySlots()->create([
+        'starts_at' => now()->addDays(2)->startOfDay()->addHours(2),
+        'ends_at' => now()->addDays(2)->startOfDay()->addHours(4),
     ]);
 
     return $offer;

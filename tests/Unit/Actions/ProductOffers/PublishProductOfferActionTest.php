@@ -32,6 +32,11 @@ function publishableOffer(User $user, array $offerOverrides = []): array
         'observed_at' => now()->subHour(),
     ]);
 
+    $offer->deliverySlots()->create([
+        'starts_at' => now()->addDays(2)->startOfDay()->addHours(2),
+        'ends_at' => now()->addDays(2)->startOfDay()->addHours(4),
+    ]);
+
     return [$offer, $benchmark];
 }
 
@@ -112,6 +117,30 @@ it('rejects a draft missing standard cost components', function () {
 
     expect(fn () => app(PublishProductOfferAction::class)->execute($user, $offer, $benchmark))
         ->toThrow(RuntimeException::class);
+});
+
+it('rejects publishing a draft without a future delivery slot', function () {
+    $user = User::factory()->operator()->create();
+    $offer = ProductOffer::factory()->create([
+        'farmer_payment_minor' => 280,
+        'platform_margin_minor' => 100,
+        'final_price_minor' => 999,
+        'farmer_share_bps' => 1,
+    ]);
+    $offer->costs()->saveMany([
+        OfferCostComponent::factory()->standard('collection', 30)->make(),
+        OfferCostComponent::factory()->standard('quality_control', 20)->make(),
+        OfferCostComponent::factory()->standard('hub_handling_storage', 30)->make(),
+        OfferCostComponent::factory()->standard('delivery_allocation', 90)->make(),
+    ]);
+    $benchmark = BenchmarkComparison::factory()->create([
+        'product_offer_id' => $offer->id,
+        'benchmark_price_minor' => 800,
+        'observed_at' => now()->subHour(),
+    ]);
+
+    expect(fn () => app(PublishProductOfferAction::class)->execute($user, $offer, $benchmark))
+        ->toThrow(RuntimeException::class, 'At least one future delivery slot is required for publication.');
 });
 
 it('rejects a benchmark that belongs to another offer', function () {

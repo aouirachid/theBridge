@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\BenchmarkComparison;
+use App\Models\OfferDeliverySlot;
 use App\Models\ProductOffer;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -127,9 +128,10 @@ it('never exposes actor, internal, or private fields anywhere', function () {
         'currentComparison',
         'freshComparisonUnavailable',
         'comparisonHistory',
+        'order',
     );
 
-    foreach (['offer', 'currentComparison', 'freshComparisonUnavailable', 'comparisonHistory'] as $prop) {
+    foreach (['offer', 'currentComparison', 'freshComparisonUnavailable', 'comparisonHistory', 'order'] as $prop) {
         if (is_array($props[$prop])) {
             array_walk_recursive($props[$prop], function ($value, $key) use ($forbidden): void {
                 expect($forbidden)->not->toContain($key);
@@ -328,4 +330,56 @@ it('keeps authorized staff access after the public window ends', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->component('operator/offers/manage')
             ->where('offer.status', 'superseded'));
+});
+
+it('exposes the orderable offer order props with three zones and future slots', function () {
+    $this->freezeTime();
+
+    $offer = publishedPublicOffer();
+    $slot = OfferDeliverySlot::factory()->for($offer, 'offer')->create([
+        'starts_at' => now()->addDay()->addHours(2)->startOfMinute(),
+        'ends_at' => now()->addDay()->addHours(4)->startOfMinute(),
+    ]);
+
+    $startsAt = $slot->starts_at->copy()->setTimezone('Africa/Casablanca');
+    $endsAt = $slot->ends_at->copy()->setTimezone('Africa/Casablanca');
+
+    $this->get(route('offers.show', $offer->public_id))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('order.canOrder', true)
+            ->has('order.deliveryZones', 3)
+            ->where('order.deliveryZones.0.code', 'casablanca_centre')
+            ->where('order.deliveryZones.1.code', 'casablanca_east')
+            ->where('order.deliveryZones.2.code', 'casablanca_west')
+            ->has('order.deliverySlots', 1)
+            ->where('order.deliverySlots.0.publicId', (string) $slot->public_id)
+            ->where('order.deliverySlots.0.startsAt', $slot->starts_at->toIso8601String())
+            ->where('order.deliverySlots.0.endsAt', $slot->ends_at->toIso8601String())
+            ->where('order.deliverySlots.0.serviceDate', $startsAt->toDateString())
+            ->where('order.deliverySlots.0.label', $startsAt->format('D j M H:i').' – '.$endsAt->format('H:i'))
+            ->where('order.submissionToken', fn (string $token) => Str::isUuid($token)));
+
+    $response = $this->get(route('offers.show', $offer->public_id))->assertOk();
+
+    expect($response->viewData('page')['props']['order']['submissionToken'])->toBeString();
+    expect(Str::isUuid($response->viewData('page')['props']['order']['submissionToken']))->toBeTrue();
+});
+
+it('keeps order props unavailable without any future delivery slot', function () {
+    $this->freezeTime();
+
+    $offer = publishedPublicOffer();
+    OfferDeliverySlot::factory()->for($offer, 'offer')->create([
+        'starts_at' => now()->subDay(),
+        'ends_at' => now()->subDay()->addHours(2),
+    ]);
+
+    $this->get(route('offers.show', $offer->public_id))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('order.canOrder', false)
+            ->where('order.deliverySlots', [])
+            ->where('order.submissionToken', null)
+            ->has('order.deliveryZones', 3));
 });

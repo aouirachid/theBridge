@@ -1,4 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
+import OrderCheckout from '@/components/order-checkout';
 import { Badge } from '@/components/ui/badge';
 import {
     Card,
@@ -8,7 +9,7 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { show as showOffer } from '@/routes/offers';
-import type { PublicComparison, PublicOfferShow } from '@/types';
+import type { OrderProps, PublicComparison, PublicOfferShow } from '@/types';
 
 const SOURCE_LABELS: Record<PublicComparison['sourceType'], string> = {
     url: 'Published source',
@@ -29,11 +30,13 @@ export default function PublicOfferShow({
     currentComparison,
     freshComparisonUnavailable,
     comparisonHistory,
+    order,
 }: {
     offer: PublicOfferShow;
     currentComparison: PublicComparison | null;
     freshComparisonUnavailable: boolean;
     comparisonHistory: PublicComparison[];
+    order: OrderProps;
 }) {
     return (
         <>
@@ -154,6 +157,22 @@ export default function PublicOfferShow({
                             </CardContent>
                         </Card>
                     </section>
+
+                    {offer.isSuperseded ? null : order.canOrder ? (
+                        <OrderCheckout
+                            offerPublicId={offer.publicId}
+                            order={order}
+                        />
+                    ) : (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Ordering unavailable</CardTitle>
+                                <CardDescription>
+                                    This offer cannot be ordered right now.
+                                </CardDescription>
+                            </CardHeader>
+                        </Card>
+                    )}
 
                     <Card>
                         <CardHeader>

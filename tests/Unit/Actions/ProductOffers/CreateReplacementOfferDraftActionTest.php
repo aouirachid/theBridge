@@ -33,6 +33,11 @@ function replacementSourceOffer(array $overrides = []): ProductOffer
         'farmer_share_bps' => 4870,
     ])->save();
 
+    $source->deliverySlots()->create([
+        'starts_at' => now()->addDays(2)->startOfDay()->addHours(2),
+        'ends_at' => now()->addDays(2)->startOfDay()->addHours(4),
+    ]);
+
     return $source;
 }
 
@@ -60,6 +65,20 @@ it('clones immutable offer inputs into one editable draft', function () {
     expect($draft->platform_margin_minor)->toBe($source->platform_margin_minor);
     expect($draft->final_price_minor)->toBe(575);
     expect($draft->farmer_share_bps)->toBe(4870);
+});
+
+it('clones the delivery slots with exact windows', function () {
+    $operator = User::factory()->operator()->create();
+    $source = replacementSourceOffer();
+
+    $draft = app(CreateReplacementOfferDraftAction::class)->execute($operator, $source);
+
+    $slots = $draft->deliverySlots()->get();
+
+    expect($slots)->toHaveCount(1);
+    expect($slots->first()->starts_at->equalTo($source->deliverySlots()->first()->starts_at))->toBeTrue();
+    expect($slots->first()->ends_at->equalTo($source->deliverySlots()->first()->ends_at))->toBeTrue();
+    expect($slots->first()->product_offer_id)->not->toBe($source->id);
 });
 
 it('clones the full cost collection with exact normalized names and positions', function () {

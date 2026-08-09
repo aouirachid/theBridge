@@ -53,6 +53,10 @@ final class PublishProductOfferAction
                 throw new RuntimeException('All four standard cost components are required for publication.');
             }
 
+            if (! $lockedOffer->deliverySlots()->where('starts_at', '>', $now)->exists()) {
+                throw new RuntimeException('At least one future delivery slot is required for publication.');
+            }
+
             $operatingMinor = $costs->sum(fn (OfferCostComponent $cost): int => $cost->amount_minor);
             $finalMinor = OfferPriceCalculator::finalPriceMinor(
                 $lockedOffer->farmer_payment_minor,

@@ -34,6 +34,7 @@ class UserFactory extends Factory
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
             'is_sourcing_operator' => false,
+            'is_operations_operator' => false,
         ];
     }
 
@@ -44,6 +45,16 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'is_sourcing_operator' => true,
+        ]);
+    }
+
+    /**
+     * Indicate that the user is an operations operator.
+     */
+    public function operationsOperator(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_operations_operator' => true,
         ]);
     }
 

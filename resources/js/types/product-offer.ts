@@ -81,6 +81,12 @@ export type OperatorOfferCapabilities = {
     recordBenchmark: boolean;
 };
 
+export type OperatorDeliverySlot = {
+    publicId: string;
+    startsAt: string;
+    endsAt: string;
+};
+
 export type PublicMoney = {
     minor: number;
     formatted: string;
@@ -123,4 +129,22 @@ export type PublicOfferShow = {
     isSuperseded: boolean;
     replacesPublicId: string | null;
     replacementPublicId: string | null;
+};
+
+export type DeliveryZoneCode =
+    'casablanca_centre' | 'casablanca_east' | 'casablanca_west';
+
+export type PublicDeliverySlot = {
+    publicId: string;
+    startsAt: string;
+    endsAt: string;
+    serviceDate: string;
+    label: string;
+};
+
+export type OrderProps = {
+    canOrder: boolean;
+    deliveryZones: Array<{ code: DeliveryZoneCode; label: string }>;
+    deliverySlots: PublicDeliverySlot[];
+    submissionToken: string | null;
 };

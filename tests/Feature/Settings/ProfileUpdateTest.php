@@ -33,6 +33,22 @@ test('profile information can be updated', function () {
     expect($user->email_verified_at)->toBeNull();
 });
 
+test('profile input cannot escalate operations permission', function () {
+    $user = User::factory()->create();
+
+    $this
+        ->actingAs($user)
+        ->patch(route('profile.update'), [
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+            'is_operations_operator' => true,
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('profile.edit'));
+
+    expect($user->refresh()->is_operations_operator)->toBeFalse();
+});
+
 test('email verification status is unchanged when the email address is unchanged', function () {
     $user = User::factory()->create();
 
