@@ -112,6 +112,77 @@ it('returns nested validation errors for missing standard costs', function () {
     expect(ProductOffer::query()->count())->toBe(0);
 });
 
+it('rejects an unknown standard cost key', function () {
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.store'), validStorePayload([
+            'standard_costs' => [
+                'collection' => '0.30',
+                'quality_control' => '0.20',
+                'hub_handling_storage' => '0.30',
+                'delivery_allocation' => '0.90',
+                'packaging' => '0.10',
+            ],
+        ]))
+        ->assertSessionHasErrors('standard_costs.packaging');
+
+    expect(ProductOffer::query()->count())->toBe(0);
+});
+
+it('rejects a non-array standard_costs value with a field error instead of crashing', function () {
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.store'), validStorePayload([
+            'standard_costs' => 'not-an-array',
+        ]))
+        ->assertSessionHasErrors('standard_costs');
+
+    expect(ProductOffer::query()->count())->toBe(0);
+});
+
+it('rejects a non-array custom_costs value with a field error instead of crashing', function () {
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.store'), validStorePayload([
+            'custom_costs' => 'not-an-array',
+        ]))
+        ->assertSessionHasErrors('custom_costs');
+
+    expect(ProductOffer::query()->count())->toBe(0);
+});
+
+it('rejects a non-empty body on the replacement route without changing data', function () {
+    $source = publishedSourceOffer();
+
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.replacements.store', $source), ['crop' => 'Hacked'])
+        ->assertSessionHasErrors();
+
+    expect($source->replacement()->count())->toBe(0);
+});
+
+it('rejects a non-empty body on the withdrawal route without changing data', function () {
+    $offer = ProductOffer::factory()->published()->create();
+
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.withdrawals.store', $offer), ['crop' => 'Hacked'])
+        ->assertSessionHasErrors();
+
+    expect($offer->refresh()->withdrawn_at)->toBeNull();
+});
+
+it('rejects a non-empty body on the benchmark publication route without changing data', function () {
+    $source = publishedSourceOffer();
+    $candidate = BenchmarkComparison::factory()->create([
+        'product_offer_id' => $source->id,
+        'benchmark_price_minor' => 900,
+        'observed_at' => now()->subMinutes(5),
+    ]);
+
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.benchmarks.publications.store', [$source, $candidate]), ['market_name' => 'Hacked'])
+        ->assertSessionHasErrors();
+
+    expect($candidate->refresh()->published_at)->toBeNull();
+});
+
 it('stores only integer-centime values from decimal input', function () {
     $this->actingAs($this->operator)
         ->post(route('operator.offers.store'), validStorePayload([
@@ -134,6 +205,65 @@ it('rejects money with more than two fractional digits', function () {
         ->assertSessionHasErrors('platform_margin_per_kg');
 
     expect(ProductOffer::query()->count())->toBe(0);
+});
+
+it('rejects a crop containing an email address', function () {
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.store'), validStorePayload([
+            'crop' => 'Tomatoes farmer@example.com',
+        ]))
+        ->assertSessionHasErrors('crop');
+
+    expect(ProductOffer::query()->count())->toBe(0);
+});
+
+it('rejects an origin containing a phone number', function () {
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.store'), validStorePayload([
+            'origin' => 'Souss-Massa +212 661 234 567',
+        ]))
+        ->assertSessionHasErrors('origin');
+
+    expect(ProductOffer::query()->count())->toBe(0);
+});
+
+it('rejects a custom cost name containing an exact address', function () {
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.store'), validStorePayload([
+            'custom_costs' => [
+                ['name' => 'Rue des Oliviers 45', 'amount_per_kg' => '0.50'],
+            ],
+        ]))
+        ->assertSessionHasErrors('custom_costs.0.name');
+
+    expect(ProductOffer::query()->count())->toBe(0);
+});
+
+it('rejects an origin containing a credential-bearing URL', function () {
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.store'), validStorePayload([
+            'origin' => 'Souss-Massa https://operator:secret@example.com',
+        ]))
+        ->assertSessionHasErrors('origin');
+
+    expect(ProductOffer::query()->count())->toBe(0);
+});
+
+it('rejects a benchmark source reference containing private contact details', function () {
+    $offer = ProductOffer::factory()->create();
+
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.benchmarks.store', $offer), [
+            'benchmark_price_per_kg' => '8.00',
+            'market_name' => 'Casablanca traditional market',
+            'source_type' => 'field_observation',
+            'source_reference' => 'Call 06 12 34 56 78',
+            'observed_at' => now()->subHour()->toDateTimeString(),
+            'is_demo' => true,
+        ])
+        ->assertSessionHasErrors('source_reference');
+
+    expect(BenchmarkComparison::query()->count())->toBe(0);
 });
 
 it('shows the edit form for a draft with capabilities', function () {
@@ -166,6 +296,43 @@ it('forbids updating a published offer', function () {
     $this->actingAs($this->operator)
         ->patch(route('operator.offers.update', $offer), validStorePayload())
         ->assertForbidden();
+});
+
+it('returns a field error for an invalid availability start datetime', function () {
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.store'), validStorePayload([
+            'availability_starts_at' => 'not-a-date',
+        ]))
+        ->assertSessionHasErrors('availability_starts_at');
+
+    expect(ProductOffer::query()->count())->toBe(0);
+});
+
+it('returns a field error for an invalid availability end datetime', function () {
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.store'), validStorePayload([
+            'availability_ends_at' => 'not-a-date',
+        ]))
+        ->assertSessionHasErrors('availability_ends_at');
+
+    expect(ProductOffer::query()->count())->toBe(0);
+});
+
+it('returns a field error for an invalid observed_at datetime', function () {
+    $offer = ProductOffer::factory()->create();
+
+    $this->actingAs($this->operator)
+        ->post(route('operator.offers.benchmarks.store', $offer), [
+            'benchmark_price_per_kg' => '8.00',
+            'market_name' => 'Casablanca traditional market',
+            'source_type' => 'field_observation',
+            'source_reference' => 'Phase 1 demo observation',
+            'observed_at' => 'not-a-date',
+            'is_demo' => true,
+        ])
+        ->assertSessionHasErrors('observed_at');
+
+    expect(BenchmarkComparison::query()->count())->toBe(0);
 });
 
 it('records a benchmark for an offer', function () {

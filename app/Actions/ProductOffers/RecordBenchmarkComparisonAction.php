@@ -6,6 +6,7 @@ use App\Models\BenchmarkComparison;
 use App\Models\ProductOffer;
 use App\Models\User;
 use App\Support\Pricing\OfferPriceCalculator;
+use App\Support\Validation\PublicDisplayText;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -25,9 +26,9 @@ final class RecordBenchmarkComparisonAction
     {
         $validated = Validator::make($input, [
             'benchmark_price_per_kg' => ['required', 'string', 'regex:/^\d+(\.\d{1,2})?$/', 'not_in:0,0.0,0.00'],
-            'market_name' => ['required', 'string', 'max:160'],
+            'market_name' => ['required', 'string', 'max:160', new PublicDisplayText],
             'source_type' => ['required', Rule::in(['url', 'document', 'field_observation'])],
-            'source_reference' => ['required', 'string', 'max:500'],
+            'source_reference' => ['required', 'string', 'max:500', new PublicDisplayText],
             'observed_at' => ['required', 'date', 'before_or_equal:now'],
             'is_demo' => ['required', 'boolean'],
         ])->validate();

@@ -2,16 +2,28 @@
 
 namespace App\Http\Requests\Operator;
 
+use App\Concerns\RejectsNonEmptyBody;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class PublishBenchmarkComparisonRequest extends FormRequest
 {
+    use RejectsNonEmptyBody;
+
     /**
      * Determine whether the user can publish a benchmark refresh for this offer.
      */
     public function authorize(): bool
     {
         return $this->user()?->can('publishBenchmark', $this->route('productOffer')) ?? false;
+    }
+
+    /**
+     * Reject any submitted body.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $this->rejectNonEmptyBody($validator);
     }
 
     /**

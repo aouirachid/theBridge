@@ -97,6 +97,43 @@ it('rejects an observed_at that is not a parseable date', function () {
     ])))->toThrow(ValidationException::class);
 });
 
+it('rejects a market name containing an email address', function () {
+    $user = User::factory()->operator()->create();
+    $offer = ProductOffer::factory()->create();
+
+    expect(fn () => app(RecordBenchmarkComparisonAction::class)->execute($user, $offer, recordBenchmarkInput([
+        'market_name' => 'Market trader@example.com',
+    ])))->toThrow(ValidationException::class);
+});
+
+it('rejects a market name containing a phone number', function () {
+    $user = User::factory()->operator()->create();
+    $offer = ProductOffer::factory()->create();
+
+    expect(fn () => app(RecordBenchmarkComparisonAction::class)->execute($user, $offer, recordBenchmarkInput([
+        'market_name' => 'Market +212 661 234 567',
+    ])))->toThrow(ValidationException::class);
+});
+
+it('rejects a source reference containing an exact address', function () {
+    $user = User::factory()->operator()->create();
+    $offer = ProductOffer::factory()->create();
+
+    expect(fn () => app(RecordBenchmarkComparisonAction::class)->execute($user, $offer, recordBenchmarkInput([
+        'source_reference' => 'Lot 12, Rue des Oliviers 45, Agadir',
+    ])))->toThrow(ValidationException::class);
+});
+
+it('rejects a source reference containing credentials in a URL', function () {
+    $user = User::factory()->operator()->create();
+    $offer = ProductOffer::factory()->create();
+
+    expect(fn () => app(RecordBenchmarkComparisonAction::class)->execute($user, $offer, recordBenchmarkInput([
+        'source_type' => 'url',
+        'source_reference' => 'https://user:password@example.com/market',
+    ])))->toThrow(ValidationException::class);
+});
+
 it('persists nothing when validation fails', function () {
     $user = User::factory()->operator()->create();
     $offer = ProductOffer::factory()->create();

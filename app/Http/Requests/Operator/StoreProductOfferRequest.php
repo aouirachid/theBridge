@@ -4,7 +4,9 @@ namespace App\Http\Requests\Operator;
 
 use App\Models\OfferCostComponent;
 use App\Models\ProductOffer;
+use App\Support\Validation\PublicDisplayText;
 use Carbon\CarbonImmutable;
+use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Validator;
@@ -31,7 +33,11 @@ class StoreProductOfferRequest extends FormRequest
             'availability_ends_at' => $this->normalizeDateTime('availability_ends_at'),
         ]);
 
-        foreach ($this->input('custom_costs', []) as $index => $custom) {
+        foreach ((array) $this->input('custom_costs', []) as $index => $custom) {
+            if (! is_array($custom)) {
+                continue;
+            }
+
             $this->merge([
                 "custom_costs.$index.name" => Str::of((string) ($custom['name'] ?? ''))->squish()->toString(),
             ]);
@@ -49,9 +55,13 @@ class StoreProductOfferRequest extends FormRequest
             return null;
         }
 
-        return CarbonImmutable::parse((string) $value, 'Africa/Casablanca')
-            ->utc()
-            ->format('Y-m-d H:i:s');
+        try {
+            return CarbonImmutable::parse((string) $value, 'Africa/Casablanca')
+                ->utc()
+                ->format('Y-m-d H:i:s');
+        } catch (InvalidFormatException) {
+            return (string) $value;
+        }
     }
 
     /**
@@ -64,8 +74,8 @@ class StoreProductOfferRequest extends FormRequest
         $money = 'regex:/^\d+(\.\d{1,2})?$/';
 
         return [
-            'crop' => ['required', 'string', 'max:120'],
-            'origin' => ['required', 'string', 'max:255'],
+            'crop' => ['required', 'string', 'max:120', new PublicDisplayText],
+            'origin' => ['required', 'string', 'max:255', new PublicDisplayText],
             'available_quantity_kg' => ['required', 'numeric', 'gt:0', $money],
             'availability_starts_at' => ['required', 'date'],
             'availability_ends_at' => ['required', 'date', 'after:availability_starts_at'],
@@ -77,7 +87,7 @@ class StoreProductOfferRequest extends FormRequest
             'standard_costs.hub_handling_storage' => ['required', 'string', $money],
             'standard_costs.delivery_allocation' => ['required', 'string', $money],
             'custom_costs' => ['array', 'max:10'],
-            'custom_costs.*.name' => ['required', 'string', 'max:120'],
+            'custom_costs.*.name' => ['required', 'string', 'max:120', new PublicDisplayText],
             'custom_costs.*.amount_per_kg' => ['required', 'string', $money],
         ];
     }
@@ -89,9 +99,26 @@ class StoreProductOfferRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $standardCosts = $this->input('standard_costs', []);
+            $knownStandardKeys = ['collection', 'quality_control', 'hub_handling_storage', 'delivery_allocation'];
+
+            if (is_array($standardCosts)) {
+                foreach (array_keys($standardCosts) as $key) {
+                    if (! in_array($key, $knownStandardKeys, true)) {
+                        $validator->errors()->add("standard_costs.$key", 'This is not a recognized standard cost category.');
+                    }
+                }
+            }
+
             $seen = [];
 
-            foreach ($this->input('custom_costs', []) as $index => $custom) {
+            $customCosts = $this->input('custom_costs', []);
+
+            if (! is_array($customCosts)) {
+                return;
+            }
+
+            foreach ($customCosts as $index => $custom) {
                 $name = Str::of((string) ($custom['name'] ?? ''))->squish()->toString();
 
                 if ($name === '') {
