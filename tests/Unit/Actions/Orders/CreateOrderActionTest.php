@@ -11,7 +11,9 @@ use App\Models\OrderStatusTransition;
 use App\Models\ProductOffer;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Tests\TestCase;
 
@@ -104,6 +106,24 @@ it('creates a confirmed B2C order with snapshots and both transitions', function
     expect($history[0]->to_status)->toBe(OrderStatus::Pending);
     expect($history[1]->from_status)->toBe(OrderStatus::Pending);
     expect($history[1]->to_status)->toBe(OrderStatus::Confirmed);
+});
+
+it('rolls back the order and initial transition when confirmation history fails', function () {
+    $offer = orderableOfferWithSlot();
+    $createdTransitions = 0;
+
+    Event::listen('eloquent.creating: '.OrderStatusTransition::class, function () use (&$createdTransitions): void {
+        $createdTransitions++;
+
+        if ($createdTransitions === 2) {
+            throw new RuntimeException('Simulated confirmation-history failure.');
+        }
+    });
+
+    expect(fn () => createOrder($offer))->toThrow(RuntimeException::class);
+
+    expect(Order::count())->toBe(0);
+    expect(OrderStatusTransition::count())->toBe(0);
 });
 
 it('stores encrypted contact fields and never the raw submission token', function () {

@@ -3,11 +3,13 @@
 namespace App\Actions\ProductOffers;
 
 use App\Enums\DeliveryZone;
+use App\Enums\OrderStatus;
 use App\Models\BenchmarkComparison;
 use App\Models\OfferCostComponent;
 use App\Models\OfferDeliverySlot;
 use App\Models\ProductOffer;
 use App\Support\Pricing\OfferPriceCalculator;
+use App\Support\Pricing\OrderTotalCalculator;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -97,13 +99,21 @@ final class ShowPublicProductOfferAction
     {
         $futureSlots = $offer->deliverySlots()
             ->where('starts_at', '>', $now)
+            ->limit(14)
             ->get()
             ->map(fn (OfferDeliverySlot $slot): array => $this->deliverySlot($slot))
             ->values()
             ->all();
 
+        $reservedQuantity = (int) $offer->orders()
+            ->where('status', '!=', OrderStatus::Cancelled)
+            ->sum('quantity_hundredths');
+        $hasRemainingQuantity = OrderTotalCalculator::parseQuantityKg($offer->available_quantity_kg)
+            > $reservedQuantity;
+
         $canOrder = $offer->isPublished()
             && ! $offer->isSuperseded()
+            && $hasRemainingQuantity
             && $futureSlots !== [];
 
         return [

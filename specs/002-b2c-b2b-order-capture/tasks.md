@@ -279,3 +279,8 @@ Do not start the second group until T051–T057 are complete.
 No task authorizes customer accounts, customer cancellation, notifications, payments,
 public tracking, consolidation execution, allocation, dispatch, delivery, bulk actions,
 new packages, or unrelated refactoring.
+
+## Phase 7: Convergence
+
+- [ ] T071 Add failing policy and HTTP tests proving `OrderPolicy::cancel()` permits only operations users with a currently confirmed order while `CancelOrderRequest` still lets an authorized operations user reach `CancelOrderAction` for a safe `invalid_state` conflict on later states; update `tests/Feature/Orders/OperatorOrderTest.php`, `app/Policies/OrderPolicy.php`, and `app/Http/Requests/Operator/CancelOrderRequest.php` per T051 and the cancellation failure contract (partial)
+- [ ] T072 Add failing B2C/B2B HTTP datasets for malformed, hostile, too-short, and structurally invalid operational phone numbers, then enforce one normalized Moroccan operational-phone format without logging or persisting rejected values in `tests/Feature/Orders/PublicOrderStoreTest.php` and `app/Http/Requests/Public/StoreOrderRequest.php` per FR-002, FR-003, and SR-001 (partial)

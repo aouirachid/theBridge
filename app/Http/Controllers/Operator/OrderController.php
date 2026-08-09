@@ -13,12 +13,17 @@ use Inertia\Response;
 
 class OrderController extends Controller
 {
+    public function __construct(
+        private ListOrdersAction $listOrders,
+        private ShowOrderAction $showOrder,
+    ) {}
+
     /**
      * List and filter the latest orders for operations.
      */
     public function index(ListOrdersRequest $request): Response
     {
-        $data = app(ListOrdersAction::class)->execute($request->validated());
+        $data = $this->listOrders->execute($request->validated());
 
         return Inertia::render('operator/orders/index', $data);
     }
@@ -31,7 +36,7 @@ class OrderController extends Controller
         $this->authorize('view', $order);
 
         return Inertia::render('operator/orders/show', [
-            'order' => app(ShowOrderAction::class)->execute($order),
+            'order' => $this->showOrder->execute($order),
             'can' => [
                 'cancel' => $request->user()->can('cancel', $order),
             ],

@@ -5,7 +5,6 @@ use App\Models\OfferCostComponent;
 use App\Models\ProductOffer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use RuntimeException;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);

@@ -116,6 +116,22 @@ it('validates the confirmation request fields', function () {
     $response->assertJsonValidationErrors(['delivery_slot_public_id', 'delivery_zone', 'customer_name', 'phone']);
 });
 
+it('rejects an invalid operational phone without persisting an order', function (string $phone) {
+    $offer = storeOffer();
+
+    $this->postJson(storeRoute($offer->public_id), storeBody($offer, ['phone' => $phone]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('phone');
+
+    expect(Order::count())->toBe(0);
+})->with([
+    'too short' => '06123',
+    'unsupported prefix' => '0412345678',
+    'too long' => '061234567890',
+    'letters' => 'call-me',
+    'hostile wrapper' => '<script>0612345678</script>',
+]);
+
 it('prohibits B2B-only fields for a B2C order', function () {
     $offer = storeOffer();
 
@@ -254,6 +270,80 @@ it('returns the same confirmation for an identical idempotent retry', function (
 
     expect($second['reference'])->toBe($first['reference']);
     expect(Order::count())->toBe(1);
+});
+
+it('keeps public confirmations recursively free of private and internal data', function () {
+    $offer = storeOffer();
+    $body = storeBody($offer, [
+        'customer_name' => 'Private Customer Canary',
+        'phone' => '0611223344',
+        'email' => 'private-canary@example.test',
+        'delivery_address' => '99 Private Canary Street',
+        'delivery_note' => 'Private delivery note canary',
+    ]);
+
+    $payload = $this->postJson(storeRoute($offer->public_id), $body)->assertOk()->json();
+    $forbiddenKeys = [
+        'id',
+        'product_offer_id',
+        'offer_delivery_slot_id',
+        'submission_hash',
+        'submission_token',
+        'customer_name',
+        'business_name',
+        'phone',
+        'email',
+        'delivery_address',
+        'delivery_note',
+        'actor_user_id',
+    ];
+    $inspect = function (array $value) use (&$inspect, $forbiddenKeys): void {
+        foreach ($value as $key => $child) {
+            expect($forbiddenKeys)->not->toContain((string) $key);
+
+            if (is_array($child)) {
+                $inspect($child);
+            }
+        }
+    };
+
+    $inspect($payload);
+
+    $encoded = json_encode($payload, JSON_THROW_ON_ERROR);
+    expect($encoded)->not->toContain('Private Customer Canary');
+    expect($encoded)->not->toContain('0611223344');
+    expect($encoded)->not->toContain('private-canary@example.test');
+    expect($encoded)->not->toContain('99 Private Canary Street');
+    expect($encoded)->not->toContain('Private delivery note canary');
+    expect($encoded)->not->toContain($body['submission_token']);
+});
+
+it('confirms the combined 45 kg acceptance case and preserves both price snapshots', function () {
+    $offer = storeOffer();
+
+    $b2c = $this->postJson(storeRoute($offer->public_id), storeBody($offer, [
+        'quantity_kg' => '5.00',
+    ]))->assertOk()->json();
+
+    $b2b = $this->postJson(storeRoute($offer->public_id), storeBody($offer, [
+        'channel' => OrderChannel::B2b->value,
+        'quantity_kg' => '40.00',
+        'business_name' => 'Atlas Greengrocer',
+        'delivery_address' => null,
+        'delivery_note' => null,
+    ]))->assertOk()->json();
+
+    expect($b2c['total']['minor'])->toBe(2750);
+    expect($b2b['total']['minor'])->toBe(22000);
+    expect(Order::query()->sum('quantity_hundredths'))->toBe(4500);
+
+    $offer->forceFill([
+        'final_price_minor' => 650,
+        'withdrawn_at' => now(),
+    ])->save();
+
+    expect(Order::query()->pluck('unit_price_minor')->all())->toBe([550, 550]);
+    expect(Order::query()->pluck('total_minor')->all())->toBe([2750, 22000]);
 });
 
 it('returns 409 submission_mismatch when a token is reused with different details', function () {

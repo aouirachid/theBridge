@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Auth\Access\Response;
@@ -13,7 +14,7 @@ class OrderPolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->is_operations_operator;
+        return (bool) $user->is_operations_operator;
     }
 
     /**
@@ -21,7 +22,7 @@ class OrderPolicy
      */
     public function view(User $user, Order $order): bool
     {
-        return $user->is_operations_operator;
+        return (bool) $user->is_operations_operator;
     }
 
     /**
@@ -34,7 +35,8 @@ class OrderPolicy
      */
     public function cancel(User $user, Order $order): bool
     {
-        return $user->is_operations_operator;
+        return (bool) $user->is_operations_operator
+            && $order->status === OrderStatus::Confirmed;
     }
 
     /**
@@ -59,5 +61,3 @@ class OrderPolicy
     public function forceDelete(User $user, Order $order): Response
     {
         return Response::deny('Orders cannot be deleted.');
-    }
-}

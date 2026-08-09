@@ -58,7 +58,7 @@ class StoreOrderRequest extends FormRequest
             'delivery_slot_public_id' => ['required', 'uuid'],
             'delivery_zone' => ['required', Rule::enum(DeliveryZone::class)],
             'customer_name' => ['required', 'string', 'max:120'],
-            'phone' => ['required', 'string', 'max:32'],
+            'phone' => ['required', 'string', 'regex:/^0[5-7][0-9]{8}$/'],
             'email' => ['nullable', 'email', 'max:255'],
             'business_name' => [
                 'nullable',
@@ -78,6 +78,12 @@ class StoreOrderRequest extends FormRequest
      */
     protected function normalizePhone(string $value): string
     {
+        $value = Str::of($value)->trim()->toString();
+
+        if (preg_match('/^\+?[0-9\s().-]+$/', $value) !== 1) {
+            return $value;
+        }
+
         $digits = preg_replace('/\D/', '', $value) ?? '';
 
         if (str_starts_with($digits, '212') && strlen($digits) === 12) {

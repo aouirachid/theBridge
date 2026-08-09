@@ -227,6 +227,20 @@ it('shows the private detail with contact and history for an operations user', f
             ->where('can.cancel', true));
 });
 
+it('exposes cancellation capability only for confirmed orders', function () {
+    $confirmed = Order::factory()->create();
+    $grouped = Order::factory()->create(['status' => OrderStatus::Grouped]);
+
+    expect($this->operations->can('cancel', $confirmed))->toBeTrue();
+    expect($this->operations->can('cancel', $grouped))->toBeFalse();
+    expect($this->member->can('cancel', $confirmed))->toBeFalse();
+
+    $this->actingAs($this->operations)
+        ->get(route('operator.orders.show', $grouped))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('can.cancel', false));
+});
+
 it('returns not-found for an unknown order public id', function () {
     $this->actingAs($this->operations)
         ->get(route('operator.orders.show', '00000000-0000-0000-0000-000000000000'))
@@ -293,6 +307,24 @@ it('returns to the order page with an error toast for an invalid cancellation st
     expect($order->refresh()->status)->toBe(OrderStatus::Grouped);
     expect($order->transitions()->count())->toBe(0);
 });
+
+it('rejects cancellation from every non-cancellable active lifecycle state', function (OrderStatus $status) {
+    $order = Order::factory()->create(['status' => $status]);
+
+    $this->actingAs($this->operations)
+        ->post(route('operator.orders.cancellations.store', $order))
+        ->assertRedirect()
+        ->assertSessionHas('inertia.flash_data.toast', fn ($toast) => $toast['type'] === 'error');
+
+    expect($order->refresh()->status)->toBe($status);
+    expect($order->transitions()->count())->toBe(0);
+})->with([
+    'pending' => OrderStatus::Pending,
+    'grouped' => OrderStatus::Grouped,
+    'allocated' => OrderStatus::Allocated,
+    'dispatched' => OrderStatus::Dispatched,
+    'delivered' => OrderStatus::Delivered,
+]);
 
 it('rejects a non-empty body on the cancellation route without writing', function () {
     $order = Order::factory()->create();

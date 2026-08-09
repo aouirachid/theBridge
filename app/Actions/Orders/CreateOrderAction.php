@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\ProductOffer;
 use App\Support\Pricing\OrderTotalCalculator;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -44,78 +45,79 @@ final class CreateOrderAction
         $normalized = $this->normalize($offerPublicId, $input);
         $hash = hash('sha256', $normalized['submission_token']);
 
-        $existing = Order::query()
-            ->where('submission_hash', $hash)
-            ->first();
+        return DB::transaction(function () use ($hash, $normalized, $now): array {
+            $existing = Order::query()
+                ->where('submission_hash', $hash)
+                ->first();
 
-        if ($existing !== null) {
-            return $this->confirmationOrMismatch($existing, $normalized);
-        }
+            if ($existing !== null) {
+                return $this->confirmationOrMismatch($existing, $normalized);
+            }
 
-        $offer = ProductOffer::query()
-            ->where('public_id', $offerPublicId)
-            ->lockForUpdate()
-            ->first();
+            $offer = ProductOffer::query()
+                ->where('public_id', $normalized['offer_public_id'])
+                ->lockForUpdate()
+                ->first();
 
-        $this->requireOrderableOffer($offer, $now);
+            $this->requireOrderableOffer($offer, $now);
 
-        // Re-read the hash under the offer lock to resolve the unique-hash race.
-        $existing = Order::query()
-            ->where('submission_hash', $hash)
-            ->first();
+            $existing = Order::query()
+                ->where('submission_hash', $hash)
+                ->first();
 
-        if ($existing !== null) {
-            return $this->confirmationOrMismatch($existing, $normalized);
-        }
+            if ($existing !== null) {
+                return $this->confirmationOrMismatch($existing, $normalized);
+            }
 
-        $slot = $offer->deliverySlots()
-            ->where('public_id', $normalized['delivery_slot_public_id'])
-            ->lockForUpdate()
-            ->first();
+            $slot = $offer->deliverySlots()
+                ->where('public_id', $normalized['delivery_slot_public_id'])
+                ->lockForUpdate()
+                ->first();
 
-        if (! $this->slotIsEligible($slot, $offer, $now)) {
-            throw OrderConflictException::slotUnavailable();
-        }
+            if (! $this->slotIsEligible($slot, $offer, $now)) {
+                throw OrderConflictException::slotUnavailable();
+            }
 
-        $quantityHundredths = OrderTotalCalculator::parseQuantityKg($normalized['quantity_kg']);
-        $this->assertRemainingQuantity($offer, $quantityHundredths);
+            $quantityHundredths = OrderTotalCalculator::parseQuantityKg($normalized['quantity_kg']);
+            $this->assertRemainingQuantity($offer, $quantityHundredths);
 
-        $unitPriceMinor = (int) $offer->final_price_minor;
+            $unitPriceMinor = (int) $offer->final_price_minor;
 
-        $order = Order::query()->create([
-            'submission_hash' => $hash,
-            'product_offer_id' => $offer->id,
-            'offer_delivery_slot_id' => $slot->id,
-            'channel' => $normalized['channel'],
-            'status' => OrderStatus::Pending,
-            'quantity_hundredths' => $quantityHundredths,
-            'currency' => 'MAD',
-            'unit_price_minor' => $unitPriceMinor,
-            'total_minor' => OrderTotalCalculator::totalMinor($unitPriceMinor, $quantityHundredths),
-            'offer_public_id_snapshot' => $offer->public_id,
-            'crop_snapshot' => $offer->crop,
-            'service_date' => $slot->starts_at->copy()->setTimezone('Africa/Casablanca')->toDateString(),
-            'slot_starts_at' => $slot->starts_at,
-            'slot_ends_at' => $slot->ends_at,
-            'delivery_zone' => $normalized['delivery_zone'],
-            'customer_name' => $normalized['customer_name'],
-            'business_name' => $normalized['business_name'],
-            'phone' => $normalized['phone'],
-            'email' => $normalized['email'],
-            'delivery_address' => $normalized['delivery_address'],
-            'delivery_note' => $normalized['delivery_note'],
-        ]);
+            $order = Order::query()->create([
+                'submission_hash' => $hash,
+                'product_offer_id' => $offer->id,
+                'offer_delivery_slot_id' => $slot->id,
+                'channel' => $normalized['channel'],
+                'status' => OrderStatus::Pending,
+                'quantity_hundredths' => $quantityHundredths,
+                'currency' => 'MAD',
+                'unit_price_minor' => $unitPriceMinor,
+                'total_minor' => OrderTotalCalculator::totalMinor($unitPriceMinor, $quantityHundredths),
+                'offer_public_id_snapshot' => $offer->public_id,
+                'crop_snapshot' => $offer->crop,
+                'service_date' => $slot->starts_at->copy()->setTimezone('Africa/Casablanca')->toDateString(),
+                'slot_starts_at' => $slot->starts_at,
+                'slot_ends_at' => $slot->ends_at,
+                'delivery_zone' => $normalized['delivery_zone'],
+                'customer_name' => $normalized['customer_name'],
+                'business_name' => $normalized['business_name'],
+                'phone' => $normalized['phone'],
+                'email' => $normalized['email'],
+                'delivery_address' => $normalized['delivery_address'],
+                'delivery_note' => $normalized['delivery_note'],
+            ]);
 
-        $this->recordTransition($order, null, OrderStatus::Pending, $now);
+            $this->recordTransition($order, null, OrderStatus::Pending, $now);
 
-        $order->forceFill([
-            'status' => OrderStatus::Confirmed,
-            'confirmed_at' => $now,
-        ])->save();
+            $order->forceFill([
+                'status' => OrderStatus::Confirmed,
+                'confirmed_at' => $now,
+            ])->save();
 
-        $this->recordTransition($order, OrderStatus::Pending, OrderStatus::Confirmed, $now);
+            $this->recordTransition($order, OrderStatus::Pending, OrderStatus::Confirmed, $now);
 
-        return $this->confirmation($order->fresh());
+            return $this->confirmation($order->fresh());
+        }, attempts: 3);
     }
 
     /**

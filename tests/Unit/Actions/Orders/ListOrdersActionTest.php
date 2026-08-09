@@ -60,6 +60,34 @@ it('paginates twenty-five rows newest first', function () {
     expect($second['orders']['data'][0]['reference'])->toBe($oldest->public_id);
 });
 
+it('keeps bounded pagination and filters accurate for five hundred orders', function () {
+    $offer = operatorOrderOffer();
+    $slot = operatorSlot($offer);
+
+    Order::factory()->forOffer($offer, $slot)->count(250)->create([
+        'channel' => OrderChannel::B2c,
+        'delivery_zone' => DeliveryZone::CasablancaCentre,
+    ]);
+    Order::factory()->forOffer($offer, $slot)->count(250)->create([
+        'channel' => OrderChannel::B2b,
+        'business_name' => 'Bulk Acceptance Buyer',
+        'delivery_address' => null,
+        'delivery_note' => null,
+        'delivery_zone' => DeliveryZone::CasablancaEast,
+    ]);
+
+    $result = app(ListOrdersAction::class)->execute([
+        'channel' => OrderChannel::B2b->value,
+        'delivery_zone' => DeliveryZone::CasablancaEast->value,
+    ]);
+
+    expect($result['orders']['total'])->toBe(250);
+    expect($result['orders']['per_page'])->toBe(25);
+    expect($result['orders']['data'])->toHaveCount(25);
+    expect(collect($result['orders']['data'])->pluck('channel')->unique()->all())->toBe(['b2b']);
+    expect(collect($result['orders']['data'])->pluck('deliveryZone.code')->unique()->all())->toBe(['casablanca_east']);
+});
+
 it('filters the list by channel', function () {
     $offer = operatorOrderOffer();
     operatorOrder($offer, ['channel' => OrderChannel::B2c->value]);

@@ -11,12 +11,14 @@ use Inertia\Inertia;
 
 class OrderCancellationController extends Controller
 {
+    public function __construct(private CancelOrderAction $cancelOrder) {}
+
     /**
      * Cancel one confirmed order on behalf of an authorized operator.
      */
     public function store(CancelOrderRequest $request, Order $order): RedirectResponse
     {
-        app(CancelOrderAction::class)->execute($order, (int) $request->user()->getAuthIdentifier());
+        $this->cancelOrder->execute($order, (int) $request->user()->getAuthIdentifier());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Order cancelled.')]);
 

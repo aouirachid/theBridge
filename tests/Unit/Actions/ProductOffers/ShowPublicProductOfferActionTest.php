@@ -3,6 +3,7 @@
 use App\Actions\ProductOffers\ShowPublicProductOfferAction;
 use App\Models\BenchmarkComparison;
 use App\Models\OfferCostComponent;
+use App\Models\Order;
 use App\Models\ProductOffer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -128,6 +129,18 @@ it('marks canOrder false when no future delivery slot exists', function () {
 
     expect($data['order']['canOrder'])->toBeFalse();
     expect($data['order']['deliverySlots'])->toBe([]);
+    expect($data['order']['submissionToken'])->toBeNull();
+});
+
+it('marks canOrder false when confirmed demand exhausts the offer quantity', function () {
+    $offer = publicOffer(['available_quantity_kg' => '5.00']);
+    $slot = $offer->deliverySlots()->firstOrFail();
+
+    Order::factory()->forOffer($offer, $slot, ['quantity_hundredths' => 500])->create();
+
+    $data = app(ShowPublicProductOfferAction::class)->execute($offer->public_id);
+
+    expect($data['order']['canOrder'])->toBeFalse();
     expect($data['order']['submissionToken'])->toBeNull();
 });
 

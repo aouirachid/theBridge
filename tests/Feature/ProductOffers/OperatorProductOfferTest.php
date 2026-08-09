@@ -512,6 +512,8 @@ it('forbids withdrawing a draft offer', function () {
 });
 
 it('repeats withdrawal safely without changing the transition', function () {
+    $this->freezeTime();
+
     $offer = ProductOffer::factory()->withdrawn()->create([
         'withdrawn_at' => now()->subDay(),
     ]);
