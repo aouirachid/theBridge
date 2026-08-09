@@ -20,6 +20,8 @@ final class OrderConflictException extends RuntimeException
 
     public const SUBMISSION_MISMATCH = 'submission_mismatch';
 
+    public const INVALID_STATE = 'invalid_state';
+
     /**
      * @param  string  $code  one of the fixed public conflict codes
      */
@@ -48,5 +50,10 @@ final class OrderConflictException extends RuntimeException
     public static function submissionMismatch(): self
     {
         return new self(self::SUBMISSION_MISMATCH, 'This submission token was already used with different details.');
+    }
+
+    public static function invalidState(): self
+    {
+        return new self(self::INVALID_STATE, 'This order is not in a cancellable state.');
     }
 }

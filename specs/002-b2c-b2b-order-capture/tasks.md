@@ -161,24 +161,24 @@ once, preserves its snapshot, and releases exactly 5 kg.
 
 ### Tests for User Story 3
 
-- [ ] T047 [P] [US3] Generate `tests/Unit/Actions/Orders/ListOrdersActionTest.php` with failing cases for newest-first 25-row pagination, all five filters, retained query parameters, 45 kg eligibility, bounded 50-offer options, eager loading, and no decrypted/index PII
-- [ ] T048 [P] [US3] Generate `tests/Unit/Actions/Orders/ShowOrderActionTest.php` with failing cases for allowlisted price/delivery/contact/history props, generalized actor labels, ordered transitions, and no internal actor IDs
-- [ ] T049 [P] [US3] Generate `tests/Unit/Actions/Orders/CancelOrderActionTest.php` with failing cases for confirmed cancellation, one transition/one release, identical repeat, row locking, and rejection from grouped/allocated/dispatched/delivered/pending states without snapshot mutation
-- [ ] T050 [US3] Generate `tests/Feature/Orders/OperatorOrderTest.php` with failing route tests for guest redirect, unverified/ordinary user denial, operations-user list/show/cancel, filter validation, 25-row pagination, private-detail-only PII, conflict display, 404 binding, toast redirect, and operator 429 limit
+- [x] T047 [P] [US3] Generate `tests/Unit/Actions/Orders/ListOrdersActionTest.php` with failing cases for newest-first 25-row pagination, all five filters, retained query parameters, 45 kg eligibility, bounded 50-offer options, eager loading, and no decrypted/index PII
+- [x] T048 [P] [US3] Generate `tests/Unit/Actions/Orders/ShowOrderActionTest.php` with failing cases for allowlisted price/delivery/contact/history props, generalized actor labels, ordered transitions, and no internal actor IDs
+- [x] T049 [P] [US3] Generate `tests/Unit/Actions/Orders/CancelOrderActionTest.php` with failing cases for confirmed cancellation, one transition/one release, identical repeat, row locking, and rejection from grouped/allocated/dispatched/delivered/pending states without snapshot mutation
+- [x] T050 [US3] Generate `tests/Feature/Orders/OperatorOrderTest.php` with failing route tests for guest redirect, unverified/ordinary user denial, operations-user list/show/cancel, filter validation, 25-row pagination, private-detail-only PII, conflict display, 404 binding, toast redirect, and operator 429 limit
 
 ### Implementation for User Story 3
 
-- [ ] T051 [P] [US3] Generate `app/Policies/OrderPolicy.php` with `viewAny`, `view`, and `cancel` using only `is_operations_operator`, and ensure `cancel` additionally requires current confirmed status; do not reuse sourcing permission
-- [ ] T052 [P] [US3] Generate `app/Http/Requests/Operator/ListOrdersRequest.php` and `app/Http/Requests/Operator/CancelOrderRequest.php` with operations authorization, exact filter enum/date/UUID/page rules, and no editable cancellation body
-- [ ] T053 [P] [US3] Generate and implement `app/Actions/Orders/ListOrdersAction.php` and `app/Actions/Orders/ShowOrderAction.php` with the exact contract arrays, 25-row pagination, query preservation, bounded options, selected columns/eager loads, index PII exclusion, and authorized-detail decryption only
-- [ ] T054 [US3] Generate and implement `app/Actions/Orders/CancelOrderAction.php` with one transaction, order then offer lock, confirmed-only transition, append-only actor history, idempotent already-cancelled return, derived release, and immutable snapshot preservation
-- [ ] T055 [US3] Generate `app/Http/Controllers/Operator/OrderController.php` and `app/Http/Controllers/Operator/OrderCancellationController.php`; keep methods to policy/Request -> Action -> Inertia/redirect mapping with no query, status, or transaction logic
-- [ ] T056 [US3] Add only the three authenticated/verified/policy/throttled operator routes from the contract to `routes/orders.php`, using public-ID binding and scoped route names; do not add update/delete/bulk routes
-- [ ] T057 [US3] Create all order paginator, summary, detail, transition, filter, enum, and confirmation TypeScript shapes from the contract in `resources/js/types/order.ts` and export them from `resources/js/types/index.ts`
-- [ ] T058 [P] [US3] Create `resources/js/pages/operator/orders/index.tsx` with `AppLayout`, Wayfinder filters/links, 25-row pagination, empty state, status badges, no contact fields, and a mobile scroll container using existing Tailwind v4/UI patterns
-- [ ] T059 [P] [US3] Create `resources/js/pages/operator/orders/show.tsx` with price/delivery/private-contact/history Cards, generalized actor labels, policy-controlled cancellation dialog/form, server conflict display, and no optimistic update
-- [ ] T060 [US3] Add one policy-aware Orders Wayfinder navigation item without hardcoded URLs in `resources/js/components/app-sidebar.tsx`; leave existing Product Offers navigation unchanged
-- [ ] T061 [US3] Run `php artisan wayfinder:generate --with-form --no-interaction`, then run `php artisan test --compact tests/Unit/Actions/Orders tests/Feature/Orders/OperatorOrderTest.php` and `npm.cmd run types:check`; stop until all pass
+- [x] T051 [P] [US3] Generate `app/Policies/OrderPolicy.php` with `viewAny`, `view`, and `cancel` using only `is_operations_operator`, and ensure `cancel` additionally requires current confirmed status; do not reuse sourcing permission
+- [x] T052 [P] [US3] Generate `app/Http/Requests/Operator/ListOrdersRequest.php` and `app/Http/Requests/Operator/CancelOrderRequest.php` with operations authorization, exact filter enum/date/UUID/page rules, and no editable cancellation body
+- [x] T053 [P] [US3] Generate and implement `app/Actions/Orders/ListOrdersAction.php` and `app/Actions/Orders/ShowOrderAction.php` with the exact contract arrays, 25-row pagination, query preservation, bounded options, selected columns/eager loads, index PII exclusion, and authorized-detail decryption only
+- [x] T054 [US3] Generate and implement `app/Actions/Orders/CancelOrderAction.php` with one transaction, order then offer lock, confirmed-only transition, append-only actor history, idempotent already-cancelled return, derived release, and immutable snapshot preservation
+- [x] T055 [US3] Generate `app/Http/Controllers/Operator/OrderController.php` and `app/Http/Controllers/Operator/OrderCancellationController.php`; keep methods to policy/Request -> Action -> Inertia/redirect mapping with no query, status, or transaction logic
+- [x] T056 [US3] Add only the three authenticated/verified/policy/throttled operator routes from the contract to `routes/orders.php`, using public-ID binding and scoped route names; do not add update/delete/bulk routes
+- [x] T057 [US3] Create all order paginator, summary, detail, transition, filter, enum, and confirmation TypeScript shapes from the contract in `resources/js/types/order.ts` and export them from `resources/js/types/index.ts`
+- [x] T058 [P] [US3] Create `resources/js/pages/operator/orders/index.tsx` with `AppLayout`, Wayfinder filters/links, 25-row pagination, empty state, status badges, no contact fields, and a mobile scroll container using existing Tailwind v4/UI patterns
+- [x] T059 [P] [US3] Create `resources/js/pages/operator/orders/show.tsx` with price/delivery/private-contact/history Cards, generalized actor labels, policy-controlled cancellation dialog/form, server conflict display, and no optimistic update
+- [x] T060 [US3] Add one policy-aware Orders Wayfinder navigation item without hardcoded URLs in `resources/js/components/app-sidebar.tsx`; leave existing Product Offers navigation unchanged
+- [x] T061 [US3] Run `php artisan wayfinder:generate --with-form --no-interaction`, then run `php artisan test --compact tests/Unit/Actions/Orders tests/Feature/Orders/OperatorOrderTest.php` and `npm.cmd run types:check`; stop until all pass
 
 **Checkpoint**: All three user stories work. Operations can reconcile 45 kg, inspect only
 authorized PII, and cancel only the permitted order state.

@@ -2,6 +2,8 @@
 
 namespace App\Enums;
 
+use Illuminate\Support\Str;
+
 /**
  * The order lifecycle.
  *
@@ -27,6 +29,14 @@ enum OrderStatus: string
     public function canTransitionTo(self $to): bool
     {
         return in_array($to, $this->allowedTransitions(), true);
+    }
+
+    /**
+     * The public display label for this status.
+     */
+    public function label(): string
+    {
+        return Str::headline($this->name);
     }
 
     /**
