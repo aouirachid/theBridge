@@ -6,6 +6,7 @@ use App\Models\OfferCostComponent;
 use App\Models\ProductOffer;
 use App\Models\User;
 use App\Support\Pricing\OfferPriceCalculator;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -26,6 +27,10 @@ final class CreateProductOfferDraftAction
     public function execute(User $operator, array $input): ProductOffer
     {
         $this->validateCustomCosts($input['custom_costs'] ?? []);
+
+        $windowStart = CarbonImmutable::parse((string) $input['availability_starts_at']);
+        $windowEnd = CarbonImmutable::parse((string) $input['availability_ends_at']);
+        $this->validateDeliverySlots($input['delivery_slots'] ?? [], $windowStart, $windowEnd);
 
         $standardCodes = array_keys(OfferCostComponent::STANDARD_POSITIONS);
         $operatingMinor = collect($standardCodes)
@@ -76,6 +81,13 @@ final class CreateProductOfferDraftAction
                 ]);
             }
 
+            foreach ($input['delivery_slots'] as $slot) {
+                $offer->deliverySlots()->create([
+                    'starts_at' => CarbonImmutable::parse((string) $slot['starts_at']),
+                    'ends_at' => CarbonImmutable::parse((string) $slot['ends_at']),
+                ]);
+            }
+
             return $offer;
         });
     }
@@ -118,6 +130,52 @@ final class CreateProductOfferDraftAction
 
         if ($validator->fails()) {
             throw new ValidationException($validator);
+        }
+    }
+
+    /**
+     * Validate the bounded draft delivery slot collection.
+     *
+     * @param  list<array{starts_at?: mixed, ends_at?: mixed}>  $slots
+     */
+    public function validateDeliverySlots(
+        array $slots,
+        CarbonImmutable $windowStart,
+        CarbonImmutable $windowEnd,
+    ): void {
+        if (count($slots) < 1 || count($slots) > 14) {
+            throw ValidationException::withMessages([
+                'delivery_slots' => 'An offer requires between 1 and 14 delivery slots.',
+            ]);
+        }
+
+        $pairs = [];
+
+        foreach ($slots as $index => $slot) {
+            $startsAt = CarbonImmutable::parse((string) $slot['starts_at']);
+            $endsAt = CarbonImmutable::parse((string) $slot['ends_at']);
+
+            if (! $endsAt->greaterThan($startsAt)) {
+                throw ValidationException::withMessages([
+                    "delivery_slots.$index.ends_at" => 'The slot must end after it starts.',
+                ]);
+            }
+
+            if ($startsAt->lessThan($windowStart) || $endsAt->greaterThan($windowEnd)) {
+                throw ValidationException::withMessages([
+                    "delivery_slots.$index.starts_at" => 'Delivery slots must fit inside the offer availability window.',
+                ]);
+            }
+
+            $pair = $startsAt->format('Y-m-d H:i:s').'|'.$endsAt->format('Y-m-d H:i:s');
+
+            if (in_array($pair, $pairs, true)) {
+                throw ValidationException::withMessages([
+                    "delivery_slots.$index.starts_at" => 'Duplicate delivery slots are not allowed.',
+                ]);
+            }
+
+            $pairs[] = $pair;
         }
     }
 }

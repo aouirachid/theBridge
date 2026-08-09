@@ -65,6 +65,13 @@ final class CreateReplacementOfferDraftAction
                 ]);
             }
 
+            foreach ($locked->deliverySlots()->get() as $slot) {
+                $draft->deliverySlots()->create([
+                    'starts_at' => $slot->starts_at,
+                    'ends_at' => $slot->ends_at,
+                ]);
+            }
+
             return $draft;
         });
     }

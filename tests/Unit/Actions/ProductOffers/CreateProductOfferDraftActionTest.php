@@ -12,6 +12,8 @@ uses(TestCase::class, RefreshDatabase::class);
 
 function createDraftInput(array $overrides = []): array
 {
+    $slotStartsAt = now()->addDay()->startOfDay()->addHours(2);
+
     return array_replace_recursive([
         'crop' => 'Tomatoes',
         'origin' => 'Souss-Massa',
@@ -27,6 +29,10 @@ function createDraftInput(array $overrides = []): array
             'delivery_allocation' => '0.90',
         ],
         'custom_costs' => [],
+        'delivery_slots' => [
+            ['starts_at' => $slotStartsAt, 'ends_at' => $slotStartsAt->copy()->addHours(2)],
+            ['starts_at' => $slotStartsAt->copy()->addDay(), 'ends_at' => $slotStartsAt->copy()->addDay()->addHours(2)],
+        ],
     ], $overrides);
 }
 
@@ -44,6 +50,67 @@ it('creates a draft with exact centimes and calculated values', function () {
     expect($offer->created_by_user_id)->toBe($user->id);
     expect($offer->public_id)->not->toBeNull();
     expect($offer->costs()->count())->toBe(4);
+    expect($offer->deliverySlots()->count())->toBe(2);
+});
+
+it('creates delivery slots with random public identities', function () {
+    $user = User::factory()->operator()->create();
+
+    $offer = app(CreateProductOfferDraftAction::class)->execute($user, createDraftInput());
+
+    $slots = $offer->deliverySlots()->get();
+
+    expect($slots)->toHaveCount(2);
+    expect($slots->pluck('public_id'))->each->not->toBeNull();
+    expect($slots->pluck('public_id')->unique())->toHaveCount(2);
+    expect($slots->first()->starts_at->isFuture())->toBeTrue();
+    expect($slots->first()->ends_at->greaterThan($slots->first()->starts_at))->toBeTrue();
+});
+
+it('rejects more than fourteen delivery slots', function () {
+    $user = User::factory()->operator()->create();
+    $slots = collect(range(1, 15))->map(fn (int $i) => [
+        'starts_at' => now()->addDay()->startOfDay()->addHours($i * 2),
+        'ends_at' => now()->addDay()->startOfDay()->addHours($i * 2 + 1),
+    ])->all();
+
+    expect(fn () => app(CreateProductOfferDraftAction::class)->execute($user, createDraftInput([
+        'delivery_slots' => $slots,
+    ])))->toThrow(ValidationException::class);
+});
+
+it('rejects a draft without any delivery slot', function () {
+    $user = User::factory()->operator()->create();
+    $input = createDraftInput();
+    $input['delivery_slots'] = [];
+
+    expect(fn () => app(CreateProductOfferDraftAction::class)->execute($user, $input))
+        ->toThrow(ValidationException::class);
+});
+
+it('rejects duplicate delivery slots', function () {
+    $user = User::factory()->operator()->create();
+    $startsAt = now()->addDay()->startOfDay()->addHours(2);
+
+    expect(fn () => app(CreateProductOfferDraftAction::class)->execute($user, createDraftInput([
+        'delivery_slots' => [
+            ['starts_at' => $startsAt, 'ends_at' => $startsAt->copy()->addHours(2)],
+            ['starts_at' => $startsAt, 'ends_at' => $startsAt->copy()->addHours(2)],
+        ],
+    ])))->toThrow(ValidationException::class);
+});
+
+it('rejects delivery slots outside the offer window', function () {
+    $user = User::factory()->operator()->create();
+
+    expect(fn () => app(CreateProductOfferDraftAction::class)->execute($user, createDraftInput([
+        'delivery_slots' => [
+            [
+                'starts_at' => now()->addDays(9)->startOfDay(),
+                'ends_at' => now()->addDays(9)->startOfDay()->addHours(2),
+            ],
+        ],
+    ])))->toThrow(ValidationException::class);
 });
 
 it('stores zero valued standard costs as explicit rows', function () {

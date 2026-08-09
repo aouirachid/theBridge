@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\Ordering\OrderConflictException;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
@@ -7,6 +8,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -27,4 +29,19 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        $exceptions->renderable(function (OrderConflictException $exception, Request $request) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'error' => [
+                        'code' => $exception->code,
+                        'message' => $exception->getMessage(),
+                    ],
+                ], 409);
+            }
+
+            Inertia::flash('toast', ['type' => 'error', 'message' => $exception->getMessage()]);
+
+            return redirect()->back();
+        });
     })->create();

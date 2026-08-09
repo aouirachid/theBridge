@@ -4,6 +4,7 @@ namespace App\Actions\ProductOffers;
 
 use App\Models\BenchmarkComparison;
 use App\Models\OfferCostComponent;
+use App\Models\OfferDeliverySlot;
 use App\Models\ProductOffer;
 use App\Models\User;
 use App\Support\Pricing\OfferPriceCalculator;
@@ -30,6 +31,7 @@ final class ShowProductOfferDraftAction
      *         farmerSharePercentage: string,
      *         status: string,
      *     },
+     *     deliverySlots: array<int, array{publicId: string, startsAt: string, endsAt: string}>,
      *     costs: array{
      *         standard: array<int, array{code: string, label: string, amount: string, position: int}>,
      *         custom: array<int, array{id: int, name: string, normalized_name: string, amount: string}>,
@@ -93,6 +95,15 @@ final class ShowProductOfferDraftAction
                 'farmerSharePercentage' => OfferPriceCalculator::formatPercentage($offer->farmer_share_bps),
                 'status' => $offer->status(),
             ],
+            'deliverySlots' => $offer->deliverySlots()
+                ->get()
+                ->map(fn (OfferDeliverySlot $slot): array => [
+                    'publicId' => $slot->public_id,
+                    'startsAt' => $slot->starts_at->toIso8601String(),
+                    'endsAt' => $slot->ends_at->toIso8601String(),
+                ])
+                ->values()
+                ->all(),
             'costs' => [
                 'standard' => $standard,
                 'custom' => $custom,

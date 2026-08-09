@@ -196,6 +196,6 @@ Use Wayfinder to generate TypeScript functions for Laravel routes. Import from `
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
-at specs/001-transparent-product-offer/plan.md
+shell commands, and other important information, read the current plan:
+`specs/002-b2c-b2b-order-capture/plan.md`
 <!-- SPECKIT END -->

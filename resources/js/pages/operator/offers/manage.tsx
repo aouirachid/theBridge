@@ -29,6 +29,7 @@ import { store as storePublication } from '@/routes/operator/offers/publications
 import { store as storeReplacement } from '@/routes/operator/offers/replacements';
 import type {
     OperatorBenchmarkComparison,
+    OperatorDeliverySlot,
     OperatorOfferCapabilities,
     OperatorOfferEditor,
     StandardCostCode,
@@ -46,6 +47,11 @@ type CustomCostInput = {
     amount_per_kg: string;
 };
 
+type DeliverySlotInput = {
+    starts_at: string;
+    ends_at: string;
+};
+
 type OfferFormData = {
     crop: string;
     origin: string;
@@ -56,6 +62,7 @@ type OfferFormData = {
     platform_margin_per_kg: string;
     standard_costs: Record<StandardCostCode, string>;
     custom_costs: CustomCostInput[];
+    delivery_slots: DeliverySlotInput[];
 };
 
 type BenchmarkFormData = {
@@ -81,7 +88,10 @@ function currentLocalDateTime(): string {
     return toLocalDateTime(new Date().toISOString());
 }
 
-function initialOfferForm(offer: OperatorOfferEditor | null): OfferFormData {
+function initialOfferForm(
+    offer: OperatorOfferEditor | null,
+    deliverySlots: OperatorDeliverySlot[],
+): OfferFormData {
     return {
         crop: offer?.crop ?? '',
         origin: offer?.origin ?? '',
@@ -106,18 +116,25 @@ function initialOfferForm(offer: OperatorOfferEditor | null): OfferFormData {
                 name: cost.name,
                 amount_per_kg: cost.amount,
             })) ?? [],
+        delivery_slots:
+            deliverySlots.map((slot) => ({
+                starts_at: toLocalDateTime(slot.startsAt),
+                ends_at: toLocalDateTime(slot.endsAt),
+            })) ?? [],
     };
 }
 
 export default function OperatorOffersManage({
     mode,
     offer,
+    deliverySlots,
     benchmarkComparisons,
     standardCostLabels,
     can,
 }: {
     mode: 'create' | 'edit';
     offer: OperatorOfferEditor | null;
+    deliverySlots: OperatorDeliverySlot[];
     benchmarkComparisons: OperatorBenchmarkComparison[];
     standardCostLabels: Record<StandardCostCode, string>;
     can: OperatorOfferCapabilities;
@@ -125,7 +142,9 @@ export default function OperatorOffersManage({
     const editable =
         mode === 'create' || (offer !== null && offer.status === 'draft');
 
-    const offerForm = useForm<OfferFormData>(initialOfferForm(offer));
+    const offerForm = useForm<OfferFormData>(
+        initialOfferForm(offer, deliverySlots),
+    );
 
     const benchmarkForm = useForm<BenchmarkFormData>({
         benchmark_price_per_kg: '',
@@ -179,6 +198,37 @@ export default function OperatorOffersManage({
         offerForm.setData(
             'custom_costs',
             offerForm.data.custom_costs.filter((_, i) => i !== index),
+        );
+    };
+
+    const setDeliverySlot = (
+        index: number,
+        field: keyof DeliverySlotInput,
+        value: string,
+    ) => {
+        offerForm.setData(
+            'delivery_slots',
+            offerForm.data.delivery_slots.map((row, i) =>
+                i === index ? { ...row, [field]: value } : row,
+            ),
+        );
+    };
+
+    const addDeliverySlot = () => {
+        if (offerForm.data.delivery_slots.length >= 14) {
+            return;
+        }
+
+        offerForm.setData('delivery_slots', [
+            ...offerForm.data.delivery_slots,
+            { starts_at: '', ends_at: '' },
+        ]);
+    };
+
+    const removeDeliverySlot = (index: number) => {
+        offerForm.setData(
+            'delivery_slots',
+            offerForm.data.delivery_slots.filter((_, i) => i !== index),
         );
     };
 
@@ -562,6 +612,101 @@ export default function OperatorOffersManage({
                                                 removeCustomCost(index)
                                             }
                                             aria-label={`Remove ${row.name || `custom cost ${index + 1}`}`}
+                                        >
+                                            <Trash2 />
+                                        </Button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="grid gap-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-medium">
+                                    Delivery slots
+                                </p>
+                                {editable && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={addDeliverySlot}
+                                        disabled={
+                                            offerForm.data.delivery_slots
+                                                .length >= 14
+                                        }
+                                    >
+                                        <Plus />
+                                        Add delivery slot
+                                    </Button>
+                                )}
+                            </div>
+
+                            <p className="text-sm text-muted-foreground">
+                                Published time windows customers can pick for
+                                delivery.
+                            </p>
+
+                            {offerForm.data.delivery_slots.map((row, index) => (
+                                <div
+                                    key={index}
+                                    className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-center"
+                                >
+                                    <div>
+                                        <Input
+                                            name={`delivery_slots[${index}][starts_at]`}
+                                            type="datetime-local"
+                                            value={row.starts_at}
+                                            onChange={(event) =>
+                                                setDeliverySlot(
+                                                    index,
+                                                    'starts_at',
+                                                    event.target.value,
+                                                )
+                                            }
+                                            disabled={!editable}
+                                            aria-label={`Delivery slot ${index + 1} starts at`}
+                                        />
+                                        <InputError
+                                            message={
+                                                offerForm.errors[
+                                                    `delivery_slots.${index}.starts_at`
+                                                ]
+                                            }
+                                        />
+                                    </div>
+                                    <div>
+                                        <Input
+                                            name={`delivery_slots[${index}][ends_at]`}
+                                            type="datetime-local"
+                                            value={row.ends_at}
+                                            onChange={(event) =>
+                                                setDeliverySlot(
+                                                    index,
+                                                    'ends_at',
+                                                    event.target.value,
+                                                )
+                                            }
+                                            disabled={!editable}
+                                            aria-label={`Delivery slot ${index + 1} ends at`}
+                                        />
+                                        <InputError
+                                            message={
+                                                offerForm.errors[
+                                                    `delivery_slots.${index}.ends_at`
+                                                ]
+                                            }
+                                        />
+                                    </div>
+                                    {editable && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() =>
+                                                removeDeliverySlot(index)
+                                            }
+                                            aria-label={`Remove delivery slot ${index + 1}`}
                                         >
                                             <Trash2 />
                                         </Button>

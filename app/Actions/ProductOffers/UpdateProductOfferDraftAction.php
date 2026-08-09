@@ -6,6 +6,7 @@ use App\Models\OfferCostComponent;
 use App\Models\ProductOffer;
 use App\Models\User;
 use App\Support\Pricing\OfferPriceCalculator;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -30,7 +31,13 @@ final class UpdateProductOfferDraftAction
         }
 
         $this->validateStandardCodes($input['standard_costs'] ?? []);
-        (new CreateProductOfferDraftAction)->validateCustomCosts($input['custom_costs'] ?? []);
+        $creator = new CreateProductOfferDraftAction;
+        $creator->validateCustomCosts($input['custom_costs'] ?? []);
+        $creator->validateDeliverySlots(
+            $input['delivery_slots'] ?? [],
+            CarbonImmutable::parse((string) $input['availability_starts_at']),
+            CarbonImmutable::parse((string) $input['availability_ends_at']),
+        );
 
         $standardCodes = array_keys(OfferCostComponent::STANDARD_POSITIONS);
         $operatingMinor = collect($standardCodes)
@@ -79,6 +86,15 @@ final class UpdateProductOfferDraftAction
                     'normalized_name' => OfferCostComponent::normalizeName($name),
                     'amount_minor' => OfferPriceCalculator::parseMinor((string) $custom['amount_per_kg']),
                     'position' => 100 + $index,
+                ]);
+            }
+
+            $offer->deliverySlots()->delete();
+
+            foreach ($input['delivery_slots'] as $slot) {
+                $offer->deliverySlots()->create([
+                    'starts_at' => CarbonImmutable::parse((string) $slot['starts_at']),
+                    'ends_at' => CarbonImmutable::parse((string) $slot['ends_at']),
                 ]);
             }
 

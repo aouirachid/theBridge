@@ -40,6 +40,7 @@ class ProductOfferController extends Controller
         return Inertia::render('operator/offers/manage', [
             'mode' => 'create',
             'offer' => null,
+            'deliverySlots' => [],
             'benchmarkComparisons' => [],
             'standardCostLabels' => OfferCostComponent::STANDARD_LABELS,
             'can' => [
@@ -76,6 +77,7 @@ class ProductOfferController extends Controller
         return Inertia::render('operator/offers/manage', [
             'mode' => 'edit',
             'offer' => $this->editor($data),
+            'deliverySlots' => $data['deliverySlots'],
             'benchmarkComparisons' => $data['benchmarks']['newest30'],
             'standardCostLabels' => OfferCostComponent::STANDARD_LABELS,
             'can' => [
